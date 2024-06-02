@@ -1,0 +1,71 @@
+package com.example.footballquiz;
+
+import android.content.Context;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
+import android.util.Log;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+
+public class PlayersDatabaseHelper extends SQLiteOpenHelper {
+    private static final String DATABASE_NAME = "players_quiz.db";
+    private static final int DATABASE_VERSION = 1;
+    private Context context;
+    private static final String CSV_FILE_NAME = "players.csv";
+
+    public PlayersDatabaseHelper(Context context) {
+        super(context, DATABASE_NAME, null, DATABASE_VERSION);
+        this.context = context;
+    }
+
+    @Override
+    public void onCreate(SQLiteDatabase db) {
+        String createTableQuiz = "CREATE TABLE quiz (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "image TEXT, " +
+                "name TEXT, " +
+                "option1 TEXT, " +
+                "option2 TEXT, " +
+                "option3 TEXT, " +
+                "option4 TEXT, " +
+                "answer INTEGER)";
+        db.execSQL(createTableQuiz);
+        Log.d("PlayersDBHelper", "Table created");
+
+        // Insert questions from CSV
+        try {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(context.getAssets().open(CSV_FILE_NAME)));
+            String line;
+            int lineNumber = 0;
+            while ((line = reader.readLine()) != null) {
+                if (lineNumber == 0) {
+                    lineNumber++;
+                    continue; // Skip header line
+                }
+                String[] columns = line.split(",");
+                if (columns.length == 7) {
+                    String insertQuestion = "INSERT INTO quiz (image, name, option1, option2, option3, option4, answer) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                    db.execSQL(insertQuestion, new Object[]{columns[0], columns[1], columns[2], columns[3], columns[4], columns[5], Integer.parseInt(columns[6])});
+                    Log.d("PlayersDBHelper", "Inserted question: " + columns[1]);
+                } else {
+                    Log.e("PlayersDBHelper", "Error in CSV format at line " + lineNumber);
+                }
+                lineNumber++;
+            }
+            reader.close();
+        } catch (Exception e) {
+            Log.e("PlayersDBHelper", "Error reading CSV file", e);
+        }
+    }
+
+    @Override
+    public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        db.execSQL("DROP TABLE IF EXISTS quiz");
+        onCreate(db);
+    }
+
+    public void deleteDatabase() {
+        context.deleteDatabase(DATABASE_NAME);
+    }
+}
