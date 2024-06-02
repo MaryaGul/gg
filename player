@@ -1,0 +1,220 @@
+package com.example.footballquiz;
+
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public class GuessPlayerQuizActivity extends AppCompatActivity {
+
+    private ImageView imageViewPlayer;
+    private TextView textViewQuestion;
+    private Button buttonOption1, buttonOption2, buttonOption3, buttonOption4, buttonExit;
+    private SQLiteDatabase db;
+    private Cursor cursor;
+    private int currentQuestionIndex;
+    private String correctAnswer;
+    private int correctAnswersCount;
+    private List<Integer> questionIndices;
+
+    private String username;
+    private String quizType = "GuessPlayerQuiz"; // Example quiz type
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_guess_player_quiz);
+
+        imageViewPlayer = findViewById(R.id.imageViewPlayer);
+        textViewQuestion = findViewById(R.id.textViewQuestion);
+        buttonOption1 = findViewById(R.id.buttonOption1);
+        buttonOption2 = findViewById(R.id.buttonOption2);
+        buttonOption3 = findViewById(R.id.buttonOption3);
+        buttonOption4 = findViewById(R.id.buttonOption4);
+        buttonExit = findViewById(R.id.buttonExit);
+
+        username = getIntent().getStringExtra("username");
+
+        try {
+            PlayersDatabaseHelper dbHelper = new PlayersDatabaseHelper(this);
+            db = dbHelper.getWritableDatabase();
+            cursor = db.rawQuery("SELECT * FROM quiz", null);
+
+            questionIndices = new ArrayList<>();
+            for (int i = 0; i < cursor.getCount(); i++) {
+                questionIndices.add(i);
+            }
+            Log.d("GuessPlayerQuizActivity", "Number of questions: " + questionIndices.size());
+            Collections.shuffle(questionIndices);
+
+            if (cursor.moveToFirst()) {
+                currentQuestionIndex = 0;
+                correctAnswersCount = 0;
+                loadQuestion();
+            } else {
+                Log.e("GuessPlayerQuizActivity", "No questions found in database");
+            }
+        } catch (Exception e) {
+            Log.e("GuessPlayerQuizActivity", "Error initializing database or cursor", e);
+        }
+
+        View.OnClickListener answerClickListener = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                checkAnswer((Button) v);
+            }
+        };
+
+        buttonOption1.setOnClickListener(answerClickListener);
+        buttonOption2.setOnClickListener(answerClickListener);
+        buttonOption3.setOnClickListener(answerClickListener);
+        buttonOption4.setOnClickListener(answerClickListener);
+
+        buttonExit.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showExitConfirmationDialog();
+            }
+        });
+    }
+
+    private void loadQuestion() {
+        try {
+            if (currentQuestionIndex < 10 && cursor.moveToPosition(questionIndices.get(currentQuestionIndex))) {
+                String image = cursor.getString(cursor.getColumnIndexOrThrow("image"));
+                String question = "Who is this player?";
+                String option1 = cursor.getString(cursor.getColumnIndexOrThrow("option1"));
+                String option2 = cursor.getString(cursor.getColumnIndexOrThrow("option2"));
+                String option3 = cursor.getString(cursor.getColumnIndexOrThrow("option3"));
+                String option4 = cursor.getString(cursor.getColumnIndexOrThrow("option4"));
+                int correctAnswerPosition = cursor.getInt(cursor.getColumnIndexOrThrow("answer"));
+
+                List<String> options = new ArrayList<>();
+                options.add(option1);
+                options.add(option2);
+                options.add(option3);
+                options.add(option4);
+
+                // Save correct answer before shuffling
+                correctAnswer = options.get(correctAnswerPosition - 1);
+
+                Collections.shuffle(options);
+
+                loadImageFromAssets(image);
+
+                textViewQuestion.setText(question);
+                buttonOption1.setText(options.get(0));
+                buttonOption2.setText(options.get(1));
+                buttonOption3.setText(options.get(2));
+                buttonOption4.setText(options.get(3));
+
+                buttonOption1.setBackgroundColor(Color.parseColor("#6200EE"));
+                buttonOption2.setBackgroundColor(Color.parseColor("#6200EE"));
+                buttonOption3.setBackgroundColor(Color.parseColor("#6200EE"));
+                buttonOption4.setBackgroundColor(Color.parseColor("#6200EE"));
+            } else {
+                showResult();
+            }
+        } catch (Exception e) {
+            Log.e("GuessPlayerQuizActivity", "Error loading question", e);
+        }
+    }
+
+    private void loadImageFromAssets(String imageName) {
+        try {
+            InputStream is = getAssets().open(imageName);
+            imageViewPlayer.setImageBitmap(android.graphics.BitmapFactory.decodeStream(is));
+        } catch (IOException e) {
+            Log.e("GuessPlayerQuizActivity", "Error loading image", e);
+        }
+    }
+
+    private void checkAnswer(Button selectedButton) {
+        try {
+            String selectedAnswer = selectedButton.getText().toString();
+            if (selectedAnswer.equals(correctAnswer)) {
+                selectedButton.setBackgroundColor(Color.GREEN);
+                correctAnswersCount++;
+            } else {
+                selectedButton.setBackgroundColor(Color.RED);
+                showCorrectAnswer();
+            }
+            currentQuestionIndex++;
+            selectedButton.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    loadQuestion();
+                }
+            }, 1000);
+        } catch (Exception e) {
+            Log.e("GuessPlayerQuizActivity", "Error checking answer", e);
+        }
+    }
+
+    private void showCorrectAnswer() {
+        if (buttonOption1.getText().toString().equals(correctAnswer)) {
+            buttonOption1.setBackgroundColor(Color.GREEN);
+        } else if (buttonOption2.getText().toString().equals(correctAnswer)) {
+            buttonOption2.setBackgroundColor(Color.GREEN);
+        } else if (buttonOption3.getText().toString().equals(correctAnswer)) {
+            buttonOption3.setBackgroundColor(Color.GREEN);
+        } else if (buttonOption4.getText().toString().equals(correctAnswer)) {
+            buttonOption4.setBackgroundColor(Color.GREEN);
+        }
+    }
+
+    private void showResult() {
+        Intent intent = new Intent(GuessPlayerQuizActivity.this, ResultActivity.class);
+        intent.putExtra("correctAnswersCount", correctAnswersCount);
+        intent.putExtra("totalQuestions", currentQuestionIndex);
+        intent.putExtra("username", username);
+        intent.putExtra("quizType", quizType);
+        startActivity(intent);
+        finish();
+    }
+
+    private void showExitConfirmationDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setMessage("Do you want to end the quiz?");
+        builder.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                Intent intent = new Intent(GuessPlayerQuizActivity.this, MainActivity.class);
+                startActivity(intent);
+                finish();
+            }
+        });
+        builder.setNegativeButton("No", null);
+        builder.show();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        try {
+            if (cursor != null && !cursor.isClosed()) {
+                cursor.close();
+            }
+            if (db != null && db.isOpen()) {
+                db.close();
+            }
+        } catch (Exception e) {
+            Log.e("GuessPlayerQuizActivity", "Error closing database or cursor", e);
+        }
+    }
+}
